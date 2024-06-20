@@ -51,7 +51,8 @@ module.exports = async (req, res) => {
                         jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                         direction: direction
                     };
-                });
+                }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
+                .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
 
                 results.push({
                     city: city.name,
@@ -78,10 +79,10 @@ module.exports = async (req, res) => {
 
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
-    if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 2 und jamFactor < 4) return "Light congestion";
+    if (jamFactor >= 4 und jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 und jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 und jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
