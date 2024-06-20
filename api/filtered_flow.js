@@ -38,8 +38,7 @@ module.exports = async (req, res) => {
             apiKey: apiKey,
             in: `bbox:${bbox}`,
             locationReferencing: locationReferencing,
-            responseattributes: responseattributes,
-            advancedFeatures: 'deepCoverage,lanes'
+            responseattributes: responseattributes
         };
 
         try {
@@ -72,14 +71,8 @@ module.exports = async (req, res) => {
                     )
                 );
 
-                const causes = matchingIncidents.map(incident => incident.incidentDetails ? incident.incidentDetails.description.value : "Unbekannt").join(', ') || "Unbekannt";
-                const alternativeRoutes = matchingIncidents.map(incident => incident.alternativeRoutes ? incident.alternativeRoutes.map(route => route.description).join(', ') : "Keine Alternativrouten verfügbar").join(', ') || "Keine Alternativrouten verfügbar";
-
-                const streetNames = result.location.shape.links
-                    .map(link => link.names ? link.names.map(name => name.value).join(', ') : result.location.description || "Unbekannte Straße")
-                    .join(', ');
-
-                const directionName = matchingIncidents.map(incident => incident.roadNumbers ? incident.roadNumbers.join(', ') : "Unbekannte Richtung").join(', ') || "Unbekannt";
+                const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
+                const streetNames = result.location.shape.links.map(link => link.names.map(name => name.value)).flat().join(', ') || "Unbekannte Straße";
 
                 return {
                     location: result.location,
@@ -87,12 +80,18 @@ module.exports = async (req, res) => {
                     jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                     direction: direction,
                     cause: causes,
-                    alternativeRoutes: alternativeRoutes,
                     streets: streetNames,
-                    directionName: directionName
+                    alternativeRoutes: [] // Placeholder for alternative routes
                 };
-            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor)
-            .slice(0, 10);
+            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor).slice(0, 10);
+
+            for (const result of filteredResults) {
+                const origin = `${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng}`;
+                const destination = `${result.location.shape.links[0].points.slice(-1)[0].lat},${result.location.shape.links[0].points.slice(-1)[0].lng}`;
+
+                const alternativeRoutes = await getAlternativeRoutes(apiKey, origin, destination);
+                result.alternativeRoutes = alternativeRoutes || ["Keine Alternativrouten verfügbar"];
+            }
 
             results.push({
                 bbox: bbox,
@@ -115,12 +114,40 @@ module.exports = async (req, res) => {
     }
 };
 
+async function getAlternativeRoutes(apiKey, origin, destination) {
+    const url = 'https://router.hereapi.com/v8/routes';
+    const params = {
+        origin: origin,
+        destination: destination,
+        return: 'routeLabels,summary',
+        transportMode: 'car',
+        alternatives: 1,
+        apiKey: apiKey
+    };
+
+    try {
+        const response = await axios.get(url, { params });
+        return response.data.routes.map(route => ({
+            id: route.id,
+            labels: route.routeLabels.map(label => label.name.value).join(', '),
+            summary: route.sections.map(section => ({
+                baseDuration: section.summary.baseDuration,
+                duration: section.summary.duration,
+                length: section.summary.length
+            }))
+        }));
+    } catch (error) {
+        console.error('Error fetching alternative routes:', error);
+        return null;
+    }
+}
+
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
     if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 4 && < 6) return "Moderate congestion";
+    if (jamFactor >= 6 && < 8) return "Heavy congestion";
+    if (jamFactor >= 8 && < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
