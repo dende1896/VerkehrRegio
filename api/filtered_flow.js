@@ -23,6 +23,7 @@ async function getAlternateRoutes(origin, destination, apiKey) {
         transportMode: 'car',
         origin: origin,
         destination: destination,
+        alternatives: 3,
         return: 'polyline,summary',
         apiKey: apiKey
     };
@@ -111,7 +112,7 @@ module.exports = async (req, res) => {
             // Calculate alternate routes
             const alternativeRoutes = await getAlternateRoutes(
                 `${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng}`,
-                `${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}`,
+                `${result.location.shape.links[0].points[result.location.shape.links[0].points.length - 1].lat},${result.location.shape.links[0].points[result.location.shape.links[0].points.length - 1].lng}`,
                 apiKey
             );
 
