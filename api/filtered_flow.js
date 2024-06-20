@@ -75,7 +75,9 @@ module.exports = async (req, res) => {
                 const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
 
                 // Extrahieren von Straßennamen
-                const streetNames = result.location.shape.links.map(link => link.names.map(name => name.value)).flat().join(', ') || "Unbekannte Straße";
+                const streetNames = result.location.shape.links
+                    .map(link => link.names ? link.names.map(name => name.value).join(', ') : "Unbekannte Straße")
+                    .join(', ');
 
                 return {
                     location: result.location,
