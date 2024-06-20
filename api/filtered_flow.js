@@ -73,7 +73,7 @@ module.exports = async (req, res) => {
                 );
 
                 const causes = matchingIncidents.map(incident => incident.incidentDetails ? incident.incidentDetails.description.value : "Unbekannt").join(', ') || "Unbekannt";
-                const alternativeRoutes = matchingIncidents.map(incident => incident.alternativeRoutes ? incident.alternativeRoutes.description : "Keine Alternativrouten verfügbar").join(', ') || "Keine Alternativrouten verfügbar";
+                const alternativeRoutes = matchingIncidents.map(incident => incident.alternativeRoutes ? incident.alternativeRoutes.map(route => route.description).join(', ') : "Keine Alternativrouten verfügbar").join(', ') || "Keine Alternativrouten verfügbar";
 
                 const streetNames = result.location.shape.links
                     .map(link => link.names ? link.names.map(name => name.value).join(', ') : result.location.description || "Unbekannte Straße")
