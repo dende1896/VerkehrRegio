@@ -38,7 +38,8 @@ module.exports = async (req, res) => {
             apiKey: apiKey,
             in: `bbox:${bbox}`,
             locationReferencing: locationReferencing,
-            responseattributes: responseattributes
+            responseattributes: responseattributes,
+            advancedFeatures: 'deepCoverage,lanes'
         };
 
         try {
@@ -71,7 +72,7 @@ module.exports = async (req, res) => {
                     )
                 );
 
-                const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
+                const causes = matchingIncidents.map(incident => incident.incidentDetails ? incident.incidentDetails.description.value : "Unbekannt").join(', ') || "Unbekannt";
                 const alternativeRoutes = matchingIncidents.map(incident => incident.alternativeRoutes ? incident.alternativeRoutes.description : "Keine Alternativrouten verfügbar").join(', ') || "Keine Alternativrouten verfügbar";
 
                 const streetNames = result.location.shape.links
