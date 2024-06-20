@@ -122,7 +122,10 @@ module.exports = async (req, res) => {
                 jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                 direction: direction,
                 cause: causes,
-                alternativeRoutes: alternativeRoutes.map(route => route.sections[0].summary.text).join(', ') || "Keine Alternativrouten verfügbar",
+                alternativeRoutes: alternativeRoutes.length > 0 ? alternativeRoutes.map(route => ({
+                    summary: route.sections[0].summary.text,
+                    polyline: route.sections[0].polyline
+                })) : "Keine Alternativrouten verfügbar",
                 streets: streetNames,
                 directionName: directionName
             };
