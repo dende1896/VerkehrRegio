@@ -19,57 +19,61 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 module.exports = async (req, res) => {
     const apiKey = process.env.HERE_API_KEY || req.query.apiKey;
+    const bbox = req.query.bbox || null;
     const locationReferencing = req.query.locationReferencing || 'shape';
     const responseattributes = req.query.responseattributes || 'sh,fc';
     const jamFactorThreshold = parseInt(req.query.jamFactor, 10) || 4;
 
+    if (!bbox) {
+        res.status(400).json({ error: 'Bounding Box (bbox) parameter is required' });
+        return;
+    }
+
     try {
         const results = [];
+        
+        const url = 'https://data.traffic.hereapi.com/v7/flow';
+        const params = {
+            apiKey: apiKey,
+            in: `bbox:${bbox}`,
+            locationReferencing: locationReferencing,
+            responseattributes: responseattributes
+        };
 
-        for (const city of cities) {
-            const url = 'https://data.traffic.hereapi.com/v7/flow';
-            const params = {
-                apiKey: apiKey,
-                in: `bbox:${city.bbox}`,
-                locationReferencing: locationReferencing,
-                responseattributes: responseattributes
-            };
+        try {
+            const response = await axios.get(url, { params });
+            const data = response.data;
 
-            try {
-                const response = await axios.get(url, { params });
-                const data = response.data;
+            const filteredResults = data.results.filter(result =>
+                result.currentFlow &&
+                result.currentFlow.jamFactor >= jamFactorThreshold &&
+                result.currentFlow.speed <= 20 // Begrenzung auf Abschnitte mit geringer Geschwindigkeit
+            ).map(result => {
+                const direction = result.location.shape.links[0].points.length > 1 ? 
+                    `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
+                    "N/A";
+                return {
+                    location: result.location,
+                    currentFlow: result.currentFlow,
+                    jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
+                    direction: direction
+                };
+            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
+            .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
 
-                const filteredResults = data.results.filter(result =>
-                    result.currentFlow &&
-                    result.currentFlow.jamFactor >= jamFactorThreshold &&
-                    result.currentFlow.speed <= 20 // Begrenzung auf Abschnitte mit geringer Geschwindigkeit
-                ).map(result => {
-                    const direction = result.location.shape.links[0].points.length > 1 ? 
-                        `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
-                        "N/A";
-                    return {
-                        location: result.location,
-                        currentFlow: result.currentFlow,
-                        jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
-                        direction: direction
-                    };
-                }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
-                .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
+            results.push({
+                bbox: bbox,
+                data: filteredResults
+            });
 
-                results.push({
-                    city: city.name,
-                    data: filteredResults
-                });
-
-                // Wartezeit von 500ms zwischen den Anfragen
-                await sleep(500);
-            } catch (error) {
-                console.error(`Error fetching data for city ${city.name}:`, error.response ? error.response.data : error.message);
-                results.push({
-                    city: city.name,
-                    error: error.response ? error.response.data : error.message
-                });
-            }
+            // Wartezeit von 500ms zwischen den Anfragen
+            await sleep(500);
+        } catch (error) {
+            console.error(`Error fetching data for bbox ${bbox}:`, error.response ? error.response.data : error.message);
+            results.push({
+                bbox: bbox,
+                error: error.response ? error.response.data : error.message
+            });
         }
 
         res.status(200).json(results);
