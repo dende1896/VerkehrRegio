@@ -117,9 +117,9 @@ module.exports = async (req, res) => {
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
     if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 and jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 and jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 and jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
