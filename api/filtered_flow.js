@@ -53,13 +53,12 @@ module.exports = async (req, res) => {
             const filteredResults = flowData.results.filter(result =>
                 result.currentFlow &&
                 result.currentFlow.jamFactor >= jamFactorThreshold &&
-                result.currentFlow.speed <= 20 // Begrenzung auf Abschnitte mit geringer Geschwindigkeit
+                result.currentFlow.speed <= 20
             ).map(result => {
                 const direction = result.location.shape.links[0].points.length > 1 ? 
                     `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
                     "N/A";
                 
-                // Suchen nach Vorfällen, die die gleiche Strecke betreffen
                 const matchingIncidents = incidentsData.results.filter(incident => 
                     incident.location.shape && incident.location.shape.links.some(link =>
                         link.points.some(point =>
@@ -73,8 +72,8 @@ module.exports = async (req, res) => {
                 );
 
                 const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
+                const alternativeRoutes = matchingIncidents.map(incident => incident.alternativeRoutes ? incident.alternativeRoutes.description : "Keine Alternativrouten verfügbar").join(', ') || "Keine Alternativrouten verfügbar";
 
-                // Extrahieren von Straßennamen und Verkehrsrichtung
                 const streetNames = result.location.shape.links
                     .map(link => link.names ? link.names.map(name => name.value).join(', ') : result.location.description || "Unbekannte Straße")
                     .join(', ');
@@ -87,18 +86,18 @@ module.exports = async (req, res) => {
                     jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                     direction: direction,
                     cause: causes,
+                    alternativeRoutes: alternativeRoutes,
                     streets: streetNames,
                     directionName: directionName
                 };
-            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
-            .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
+            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor)
+            .slice(0, 10);
 
             results.push({
                 bbox: bbox,
                 data: filteredResults
             });
 
-            // Wartezeit von 500ms zwischen den Anfragen
             await sleep(500);
         } catch (error) {
             console.error(`Error fetching data for bbox ${bbox}:`, error.response ? error.response.data : error.message);
@@ -118,9 +117,9 @@ module.exports = async (req, res) => {
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
     if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 4 and jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 and jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 and jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
