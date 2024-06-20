@@ -16,7 +16,7 @@ const cities = [
 ];
 
 module.exports = async (req, res) => {
-    const apiKey = req.query.apiKey;
+    const apiKey = process.env.HERE_API_KEY || req.query.apiKey;
     const locationReferencing = req.query.locationReferencing || 'shape';
     const responseattributes = req.query.responseattributes || 'sh,fc';
     const jamFactorThreshold = parseInt(req.query.jamFactor, 10) || 4;
