@@ -40,7 +40,9 @@ module.exports = async (req, res) => {
                 const data = response.data;
 
                 const filteredResults = data.results.filter(result =>
-                    result.currentFlow && result.currentFlow.jamFactor >= jamFactorThreshold
+                    result.currentFlow &&
+                    result.currentFlow.jamFactor >= jamFactorThreshold &&
+                    result.currentFlow.speed <= 20 // Begrenzung auf Abschnitte mit geringer Geschwindigkeit
                 ).map(result => {
                     const direction = result.location.shape.links[0].points.length > 1 ? 
                         `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
@@ -59,8 +61,8 @@ module.exports = async (req, res) => {
                     data: filteredResults
                 });
 
-                // Wartezeit von 200ms zwischen den Anfragen
-                await sleep(200);
+                // Wartezeit von 500ms zwischen den Anfragen
+                await sleep(500);
             } catch (error) {
                 console.error(`Error fetching data for city ${city.name}:`, error.response ? error.response.data : error.message);
                 results.push({
