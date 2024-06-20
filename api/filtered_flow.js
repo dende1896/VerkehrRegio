@@ -17,6 +17,35 @@ const cities = [
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+async function getAlternateRoutes(origin, destination, apiKey) {
+    const url = 'https://router.hereapi.com/v8/routes';
+    const params = {
+        transportMode: 'car',
+        origin: origin,
+        destination: destination,
+        return: 'polyline,summary',
+        apiKey: apiKey
+    };
+
+    try {
+        const response = await axios.get(url, { params });
+        return response.data.routes;
+    } catch (error) {
+        console.error('Error fetching alternate routes:', error);
+        return [];
+    }
+}
+
+function explainJamFactor(jamFactor) {
+    if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
+    if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
+    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
+    if (jamFactor === 10) return "Road blocked";
+    return "Unknown";
+}
+
 module.exports = async (req, res) => {
     const apiKey = process.env.HERE_API_KEY || req.query.apiKey;
     const bbox = req.query.bbox || null;
@@ -29,9 +58,12 @@ module.exports = async (req, res) => {
         return;
     }
 
+    const [west, south, east, north] = bbox.split(',').map(Number);
+    const centerLat = (south + north) / 2;
+    const centerLng = (west + east) / 2;
+
     try {
         const results = [];
-        
         const urlFlow = 'https://data.traffic.hereapi.com/v7/flow';
         const urlIncidents = 'https://data.traffic.hereapi.com/v7/incidents';
         const params = {
@@ -41,85 +73,70 @@ module.exports = async (req, res) => {
             responseattributes: responseattributes
         };
 
-        try {
-            const [responseFlow, responseIncidents] = await Promise.all([
-                axios.get(urlFlow, { params }),
-                axios.get(urlIncidents, { params })
-            ]);
+        const [responseFlow, responseIncidents] = await Promise.all([
+            axios.get(urlFlow, { params }),
+            axios.get(urlIncidents, { params })
+        ]);
 
-            const flowData = responseFlow.data;
-            const incidentsData = responseIncidents.data;
+        const flowData = responseFlow.data;
+        const incidentsData = responseIncidents.data;
 
-            const filteredResults = flowData.results.filter(result =>
-                result.currentFlow &&
-                result.currentFlow.jamFactor >= jamFactorThreshold &&
-                result.currentFlow.speed <= 20
-            ).map(result => {
-                const direction = result.location.shape.links[0].points.length > 1 ? 
-                    `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
-                    "N/A";
-                
-                const matchingIncidents = incidentsData.results.filter(incident => 
-                    incident.location.shape && incident.location.shape.links.some(link =>
-                        link.points.some(point =>
-                            result.location.shape.links.some(resLink =>
-                                resLink.points.some(resPoint =>
-                                    point.lat === resPoint.lat && point.lng === resPoint.lng
-                                )
+        const filteredResults = flowData.results.filter(result =>
+            result.currentFlow &&
+            result.currentFlow.jamFactor >= jamFactorThreshold &&
+            result.currentFlow.speed <= 20
+        ).map(async result => {
+            const direction = result.location.shape.links[0].points.length > 1 ? 
+                `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
+                "N/A";
+            
+            const matchingIncidents = incidentsData.results.filter(incident => 
+                incident.location.shape && incident.location.shape.links.some(link =>
+                    link.points.some(point =>
+                        result.location.shape.links.some(resLink =>
+                            resLink.points.some(resPoint =>
+                                point.lat === resPoint.lat && point.lng === resPoint.lng
                             )
                         )
                     )
-                );
+                )
+            );
 
-                const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
-                const alternativeRoutes = matchingIncidents.map(incident => incident.alternativeRoutes ? incident.alternativeRoutes.description : "Keine Alternativrouten verfügbar").join(', ') || "Keine Alternativrouten verfügbar";
+            const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
+            const streetNames = result.location.shape.links
+                .map(link => link.names ? link.names.map(name => name.value).join(', ') : result.location.description || "Unbekannte Straße")
+                .join(', ');
+            const directionName = matchingIncidents.map(incident => incident.roadNumbers ? incident.roadNumbers.join(', ') : "Unbekannte Richtung").join(', ') || "Unbekannt";
 
-                const streetNames = result.location.shape.links
-                    .map(link => link.names ? link.names.map(name => name.value).join(', ') : result.location.description || "Unbekannte Straße")
-                    .join(', ');
+            // Calculate alternate routes
+            const alternativeRoutes = await getAlternateRoutes(
+                `${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng}`,
+                `${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}`,
+                apiKey
+            );
 
-                const directionName = matchingIncidents.map(incident => incident.roadNumbers ? incident.roadNumbers.join(', ') : "Unbekannte Richtung").join(', ') || "Unbekannt";
+            return {
+                location: result.location,
+                currentFlow: result.currentFlow,
+                jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
+                direction: direction,
+                cause: causes,
+                alternativeRoutes: alternativeRoutes.map(route => route.sections[0].summary.text).join(', ') || "Keine Alternativrouten verfügbar",
+                streets: streetNames,
+                directionName: directionName
+            };
+        });
 
-                return {
-                    location: result.location,
-                    currentFlow: result.currentFlow,
-                    jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
-                    direction: direction,
-                    cause: causes,
-                    alternativeRoutes: alternativeRoutes,
-                    streets: streetNames,
-                    directionName: directionName
-                };
-            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor)
-            .slice(0, 10);
+        const finalResults = await Promise.all(filteredResults);
+        results.push({
+            bbox: bbox,
+            data: finalResults
+        });
 
-            results.push({
-                bbox: bbox,
-                data: filteredResults
-            });
-
-            await sleep(500);
-        } catch (error) {
-            console.error(`Error fetching data for bbox ${bbox}:`, error.response ? error.response.data : error.message);
-            results.push({
-                bbox: bbox,
-                error: error.response ? error.response.data : error.message
-            });
-        }
-
+        await sleep(500);
         res.status(200).json(results);
     } catch (error) {
         console.error('General Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
-
-function explainJamFactor(jamFactor) {
-    if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
-    if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
-    if (jamFactor === 10) return "Road blocked";
-    return "Unknown";
-}
