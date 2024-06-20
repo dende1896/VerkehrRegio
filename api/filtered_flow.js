@@ -74,12 +74,16 @@ module.exports = async (req, res) => {
 
                 const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
 
+                // Extrahieren von Straßennamen
+                const streetNames = result.location.shape.links.map(link => link.names.map(name => name.value)).flat().join(', ') || "Unbekannte Straße";
+
                 return {
                     location: result.location,
                     currentFlow: result.currentFlow,
                     jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                     direction: direction,
-                    cause: causes
+                    cause: causes,
+                    streets: streetNames
                 };
             }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
             .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
@@ -110,8 +114,8 @@ function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
     if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
     if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 6 und jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 und jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
