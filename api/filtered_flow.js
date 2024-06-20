@@ -74,10 +74,12 @@ module.exports = async (req, res) => {
 
                 const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
 
-                // Extrahieren von Straßennamen
+                // Extrahieren von Straßennamen und Verkehrsrichtung
                 const streetNames = result.location.shape.links
-                    .map(link => link.names ? link.names.map(name => name.value).join(', ') : "Unbekannte Straße")
+                    .map(link => link.names ? link.names.map(name => name.value).join(', ') : result.location.description || "Unbekannte Straße")
                     .join(', ');
+
+                const directionName = matchingIncidents.map(incident => incident.roadNumbers ? incident.roadNumbers.join(', ') : "Unbekannte Richtung").join(', ') || "Unbekannt";
 
                 return {
                     location: result.location,
@@ -85,7 +87,8 @@ module.exports = async (req, res) => {
                     jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                     direction: direction,
                     cause: causes,
-                    streets: streetNames
+                    streets: streetNames,
+                    directionName: directionName
                 };
             }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
             .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
