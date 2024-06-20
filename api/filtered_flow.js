@@ -32,7 +32,8 @@ module.exports = async (req, res) => {
     try {
         const results = [];
         
-        const url = 'https://data.traffic.hereapi.com/v7/flow';
+        const urlFlow = 'https://data.traffic.hereapi.com/v7/flow';
+        const urlIncidents = 'https://data.traffic.hereapi.com/v7/incidents';
         const params = {
             apiKey: apiKey,
             in: `bbox:${bbox}`,
@@ -41,10 +42,15 @@ module.exports = async (req, res) => {
         };
 
         try {
-            const response = await axios.get(url, { params });
-            const data = response.data;
+            const [responseFlow, responseIncidents] = await Promise.all([
+                axios.get(urlFlow, { params }),
+                axios.get(urlIncidents, { params })
+            ]);
 
-            const filteredResults = data.results.filter(result =>
+            const flowData = responseFlow.data;
+            const incidentsData = responseIncidents.data;
+
+            const filteredResults = flowData.results.filter(result =>
                 result.currentFlow &&
                 result.currentFlow.jamFactor >= jamFactorThreshold &&
                 result.currentFlow.speed <= 20 // Begrenzung auf Abschnitte mit geringer Geschwindigkeit
@@ -52,13 +58,28 @@ module.exports = async (req, res) => {
                 const direction = result.location.shape.links[0].points.length > 1 ? 
                     `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
                     "N/A";
-                const cause = result.currentFlow.cause || "Unbekannt"; // Beispiel für mögliche Ursachen
+                
+                // Suchen nach Vorfällen, die die gleiche Strecke betreffen
+                const matchingIncidents = incidentsData.results.filter(incident => 
+                    incident.location.shape && incident.location.shape.links.some(link =>
+                        link.points.some(point =>
+                            result.location.shape.links.some(resLink =>
+                                resLink.points.some(resPoint =>
+                                    point.lat === resPoint.lat && point.lng === resPoint.lng
+                                )
+                            )
+                        )
+                    )
+                );
+
+                const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
+
                 return {
                     location: result.location,
                     currentFlow: result.currentFlow,
                     jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                     direction: direction,
-                    cause: cause
+                    cause: causes
                 };
             }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
             .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
