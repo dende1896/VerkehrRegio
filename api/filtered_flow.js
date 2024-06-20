@@ -35,48 +35,53 @@ module.exports = async (req, res) => {
                 responseattributes: responseattributes
             };
 
-            const response = await axios.get(url, { params });
-            const data = response.data;
+            try {
+                const response = await axios.get(url, { params });
+                const data = response.data;
 
-            const filteredResults = data.results.filter(result =>
-                result.currentFlow && result.currentFlow.jamFactor >= jamFactorThreshold
-            ).map(result => {
-                const direction = result.location.shape.links[0].points.length > 1 ? 
-                    `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
-                    "N/A";
-                return {
-                    location: result.location,
-                    currentFlow: result.currentFlow,
-                    jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
-                    direction: direction
-                };
-            });
+                const filteredResults = data.results.filter(result =>
+                    result.currentFlow && result.currentFlow.jamFactor >= jamFactorThreshold
+                ).map(result => {
+                    const direction = result.location.shape.links[0].points.length > 1 ? 
+                        `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
+                        "N/A";
+                    return {
+                        location: result.location,
+                        currentFlow: result.currentFlow,
+                        jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
+                        direction: direction
+                    };
+                });
 
-            results.push({
-                city: city.name,
-                data: filteredResults
-            });
+                results.push({
+                    city: city.name,
+                    data: filteredResults
+                });
 
-            // Wartezeit von 200ms zwischen den Anfragen
-            await sleep(200);
+                // Wartezeit von 200ms zwischen den Anfragen
+                await sleep(200);
+            } catch (error) {
+                console.error(`Error fetching data for city ${city.name}:`, error.response ? error.response.data : error.message);
+                results.push({
+                    city: city.name,
+                    error: error.response ? error.response.data : error.message
+                });
+            }
         }
 
         res.status(200).json(results);
     } catch (error) {
-        console.error('Error fetching data from HERE API:', error);
+        console.error('General Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
-        if (error.response) {
-            console.error(error.response.data);
-        }
     }
 };
 
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
-    if (jamFactor >= 2 und jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 und jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 und jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 und jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
+    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
