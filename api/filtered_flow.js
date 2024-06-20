@@ -15,6 +15,8 @@ const cities = [
     { name: 'Köln', bbox: '6.832,50.833,7.162,51.084' }
 ];
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 module.exports = async (req, res) => {
     const apiKey = process.env.HERE_API_KEY || req.query.apiKey;
     const locationReferencing = req.query.locationReferencing || 'shape';
@@ -22,7 +24,9 @@ module.exports = async (req, res) => {
     const jamFactorThreshold = parseInt(req.query.jamFactor, 10) || 4;
 
     try {
-        const results = await Promise.all(cities.map(async city => {
+        const results = [];
+
+        for (const city of cities) {
             const url = 'https://data.traffic.hereapi.com/v7/flow';
             const params = {
                 apiKey: apiKey,
@@ -48,11 +52,14 @@ module.exports = async (req, res) => {
                 };
             });
 
-            return {
+            results.push({
                 city: city.name,
                 data: filteredResults
-            };
-        }));
+            });
+
+            // Wartezeit von 200ms zwischen den Anfragen
+            await sleep(200);
+        }
 
         res.status(200).json(results);
     } catch (error) {
@@ -66,10 +73,10 @@ module.exports = async (req, res) => {
 
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
-    if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
+    if (jamFactor >= 2 und jamFactor < 4) return "Light congestion";
+    if (jamFactor >= 4 und jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 und jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 und jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
