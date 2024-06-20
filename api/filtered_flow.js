@@ -52,11 +52,13 @@ module.exports = async (req, res) => {
                 const direction = result.location.shape.links[0].points.length > 1 ? 
                     `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
                     "N/A";
+                const cause = result.currentFlow.cause || "Unbekannt"; // Beispiel für mögliche Ursachen
                 return {
                     location: result.location,
                     currentFlow: result.currentFlow,
                     jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
-                    direction: direction
+                    direction: direction,
+                    cause: cause
                 };
             }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
             .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
