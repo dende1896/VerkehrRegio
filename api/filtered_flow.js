@@ -53,12 +53,13 @@ module.exports = async (req, res) => {
             const filteredResults = flowData.results.filter(result =>
                 result.currentFlow &&
                 result.currentFlow.jamFactor >= jamFactorThreshold &&
-                result.currentFlow.speed <= 20
+                result.currentFlow.speed <= 20 // Begrenzung auf Abschnitte mit geringer Geschwindigkeit
             ).map(result => {
                 const direction = result.location.shape.links[0].points.length > 1 ? 
                     `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
                     "N/A";
                 
+                // Suchen nach Vorfällen, die die gleiche Strecke betreffen
                 const matchingIncidents = incidentsData.results.filter(incident => 
                     incident.location.shape && incident.location.shape.links.some(link =>
                         link.points.some(point =>
@@ -72,6 +73,8 @@ module.exports = async (req, res) => {
                 );
 
                 const causes = matchingIncidents.map(incident => incident.incidentDetails.description.value).join(', ') || "Unbekannt";
+
+                // Extrahieren von Straßennamen
                 const streetNames = result.location.shape.links.map(link => link.names.map(name => name.value)).flat().join(', ') || "Unbekannte Straße";
 
                 return {
@@ -83,7 +86,8 @@ module.exports = async (req, res) => {
                     streets: streetNames,
                     alternativeRoutes: [] // Placeholder for alternative routes
                 };
-            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor).slice(0, 10);
+            }).sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor) // Sortierung nach Jam-Faktor
+            .slice(0, 10); // Begrenzung auf die Top 10 Ergebnisse
 
             for (const result of filteredResults) {
                 const origin = `${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng}`;
@@ -98,6 +102,7 @@ module.exports = async (req, res) => {
                 data: filteredResults
             });
 
+            // Wartezeit von 500ms zwischen den Anfragen
             await sleep(500);
         } catch (error) {
             console.error(`Error fetching data for bbox ${bbox}:`, error.response ? error.response.data : error.message);
@@ -121,7 +126,7 @@ async function getAlternativeRoutes(apiKey, origin, destination) {
         destination: destination,
         return: 'routeLabels,summary',
         transportMode: 'car',
-        alternatives: 1,
+        alternatives: 3,
         apiKey: apiKey
     };
 
@@ -129,7 +134,7 @@ async function getAlternativeRoutes(apiKey, origin, destination) {
         const response = await axios.get(url, { params });
         return response.data.routes.map(route => ({
             id: route.id,
-            labels: route.routeLabels.map(label => label.name.value).join(', '),
+            labels: route.sections.map(section => section.routeLabels).flat().map(label => label.name).join(', '),
             summary: route.sections.map(section => ({
                 baseDuration: section.summary.baseDuration,
                 duration: section.summary.duration,
@@ -145,9 +150,9 @@ async function getAlternativeRoutes(apiKey, origin, destination) {
 function explainJamFactor(jamFactor) {
     if (jamFactor >= 0 && jamFactor < 2) return "No congestion";
     if (jamFactor >= 2 && jamFactor < 4) return "Light congestion";
-    if (jamFactor >= 4 && < 6) return "Moderate congestion";
-    if (jamFactor >= 6 && < 8) return "Heavy congestion";
-    if (jamFactor >= 8 && < 10) return "Severe congestion";
+    if (jamFactor >= 4 && jamFactor < 6) return "Moderate congestion";
+    if (jamFactor >= 6 && jamFactor < 8) return "Heavy congestion";
+    if (jamFactor >= 8 && jamFactor < 10) return "Severe congestion";
     if (jamFactor === 10) return "Road blocked";
     return "Unknown";
 }
