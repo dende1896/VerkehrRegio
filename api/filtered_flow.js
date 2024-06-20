@@ -1,20 +1,5 @@
 const axios = require('axios');
 
-const cities = [
-    { name: 'Hamburg', bbox: '9.757,53.395,10.325,53.984' },
-    { name: 'Hannover', bbox: '9.639,52.318,9.851,52.460' },
-    { name: 'Bremen', bbox: '8.635,53.011,8.967,53.220' },
-    { name: 'Berlin', bbox: '13.088,52.338,13.761,52.675' },
-    { name: 'Dresden', bbox: '13.628,51.002,13.882,51.110' },
-    { name: 'München', bbox: '11.360,48.061,11.722,48.248' },
-    { name: 'Frankfurt am Main', bbox: '8.499,50.020,8.800,50.202' },
-    { name: 'Nürnberg', bbox: '11.002,49.387,11.143,49.511' },
-    { name: 'Düsseldorf', bbox: '6.687,51.160,6.867,51.312' },
-    { name: 'Essen', bbox: '6.937,51.391,7.079,51.487' },
-    { name: 'Dortmund', bbox: '7.369,51.455,7.554,51.570' },
-    { name: 'Köln', bbox: '6.832,50.833,7.162,51.084' }
-];
-
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 module.exports = async (req, res) => {
@@ -50,6 +35,10 @@ module.exports = async (req, res) => {
             const flowData = responseFlow.data;
             const incidentsData = responseIncidents.data;
 
+            if (!flowData || !flowData.results) {
+                throw new Error('Invalid flow data');
+            }
+
             const filteredResults = flowData.results.filter(result =>
                 result.currentFlow &&
                 result.currentFlow.jamFactor >= jamFactorThreshold &&
@@ -60,7 +49,7 @@ module.exports = async (req, res) => {
                     "N/A";
                 
                 // Suchen nach Vorfällen, die die gleiche Strecke betreffen
-                const matchingIncidents = incidentsData.results.filter(incident => 
+                const matchingIncidents = (incidentsData.results || []).filter(incident => 
                     incident.location.shape && incident.location.shape.links.some(link =>
                         link.points.some(point =>
                             result.location.shape.links.some(resLink =>
@@ -132,7 +121,7 @@ async function getAlternativeRoutes(apiKey, origin, destination) {
 
     try {
         const response = await axios.get(url, { params });
-        return response.data.routes.map(route => ({
+        return response.data.routes ? response.data.routes.map(route => ({
             id: route.id,
             labels: route.sections.map(section => section.routeLabels).flat().map(label => label.name).join(', '),
             summary: route.sections.map(section => ({
@@ -140,10 +129,10 @@ async function getAlternativeRoutes(apiKey, origin, destination) {
                 duration: section.summary.duration,
                 length: section.summary.length
             }))
-        }));
+        })) : [];
     } catch (error) {
         console.error('Error fetching alternative routes:', error);
-        return null;
+        return [];
     }
 }
 
