@@ -47,6 +47,32 @@ function explainJamFactor(jamFactor) {
     return "Unknown";
 }
 
+async function getTrafficData(apiKey, bbox, locationReferencing, responseattributes) {
+    const urlFlow = 'https://data.traffic.hereapi.com/v7/flow';
+    const urlIncidents = 'https://data.traffic.hereapi.com/v7/incidents';
+    const params = {
+        apiKey: apiKey,
+        in: `bbox:${bbox}`,
+        locationReferencing: locationReferencing,
+        responseattributes: responseattributes
+    };
+
+    try {
+        const [responseFlow, responseIncidents] = await Promise.all([
+            axios.get(urlFlow, { params }),
+            axios.get(urlIncidents, { params })
+        ]);
+
+        return {
+            flowData: responseFlow.data,
+            incidentsData: responseIncidents.data
+        };
+    } catch (error) {
+        console.error('Error fetching traffic data:', error);
+        return null;
+    }
+}
+
 module.exports = async (req, res) => {
     const apiKey = process.env.HERE_API_KEY || req.query.apiKey;
     const bbox = req.query.bbox || null;
@@ -65,33 +91,25 @@ module.exports = async (req, res) => {
 
     try {
         const results = [];
-        const urlFlow = 'https://data.traffic.hereapi.com/v7/flow';
-        const urlIncidents = 'https://data.traffic.hereapi.com/v7/incidents';
-        const params = {
-            apiKey: apiKey,
-            in: `bbox:${bbox}`,
-            locationReferencing: locationReferencing,
-            responseattributes: responseattributes
-        };
+        const trafficData = await getTrafficData(apiKey, bbox, locationReferencing, responseattributes);
 
-        const [responseFlow, responseIncidents] = await Promise.all([
-            axios.get(urlFlow, { params }),
-            axios.get(urlIncidents, { params })
-        ]);
+        if (!trafficData) {
+            res.status(500).json({ error: 'Error fetching traffic data' });
+            return;
+        }
 
-        const flowData = responseFlow.data;
-        const incidentsData = responseIncidents.data;
+        const { flowData, incidentsData } = trafficData;
 
         const filteredResults = flowData.results.filter(result =>
             result.currentFlow &&
             result.currentFlow.jamFactor >= jamFactorThreshold &&
             result.currentFlow.speed <= 20
         ).map(async result => {
-            const direction = result.location.shape.links[0].points.length > 1 ? 
+            const direction = result.location.shape.links[0].points.length > 1 ?
                 `from ${result.location.shape.links[0].points[0].lat},${result.location.shape.links[0].points[0].lng} to ${result.location.shape.links[0].points[1].lat},${result.location.shape.links[0].points[1].lng}` :
                 "N/A";
-            
-            const matchingIncidents = incidentsData.results.filter(incident => 
+
+            const matchingIncidents = incidentsData.results.filter(incident =>
                 incident.location.shape && incident.location.shape.links.some(link =>
                     link.points.some(point =>
                         result.location.shape.links.some(resLink =>
@@ -122,19 +140,19 @@ module.exports = async (req, res) => {
                 jamFactorExplanation: explainJamFactor(result.currentFlow.jamFactor),
                 direction: direction,
                 cause: causes,
-                alternativeRoutes: alternativeRoutes.length > 0 ? alternativeRoutes.map(route => ({
-                    summary: route.sections[0].summary.text,
-                    polyline: route.sections[0].polyline
-                })) : "Keine Alternativrouten verfügbar",
+                alternativeRoutes: alternativeRoutes.map(route => route.sections[0].summary.text).join(', ') || "Keine Alternativrouten verfügbar",
                 streets: streetNames,
                 directionName: directionName
             };
         });
 
+        // Sort and filter to get the top 5 results
         const finalResults = await Promise.all(filteredResults);
+        const sortedResults = finalResults.sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor || b.location.length - a.location.length).slice(0, 5);
+
         results.push({
             bbox: bbox,
-            data: finalResults
+            data: sortedResults
         });
 
         await sleep(500);
