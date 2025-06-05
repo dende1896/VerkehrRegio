@@ -148,7 +148,15 @@ module.exports = async (req, res) => {
 
         // Sort and filter to get the top 5 results
         const finalResults = await Promise.all(filteredResults);
-        const sortedResults = finalResults.sort((a, b) => b.currentFlow.jamFactor - a.currentFlow.jamFactor || b.location.length - a.location.length).slice(0, 5);
+        const sortedResults = finalResults
+            .sort((a, b) => {
+                const jamDiff = b.currentFlow.jamFactor - a.currentFlow.jamFactor;
+                if (jamDiff !== 0) return jamDiff;
+                const aLen = a.location && a.location.length ? a.location.length : 0;
+                const bLen = b.location && b.location.length ? b.location.length : 0;
+                return bLen - aLen;
+            })
+            .slice(0, 5);
 
         results.push({
             bbox: bbox,
